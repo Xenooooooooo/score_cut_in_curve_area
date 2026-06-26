@@ -448,7 +448,10 @@ class LassoCropApp:
         border = max(0, int(border))
 
         source_rgb = self._rgba_on_white(self.original_image)
-        cropped = source_rgb.crop((left, top, right + 1, bottom + 1))
+        lasso_mask = self._build_lasso_mask(source_rgb.size)
+        masked_source = Image.new("RGB", source_rgb.size, "white")
+        masked_source.paste(source_rgb, (0, 0), lasso_mask)
+        cropped = masked_source.crop((left, top, right + 1, bottom + 1))
         out_w = cropped.width + border * 2
         out_h = cropped.height + border * 2
         output = Image.new("RGB", (out_w, out_h), "white")
@@ -465,16 +468,8 @@ class LassoCropApp:
 
         image = self._rgba_on_white(self.original_image)
         img_w, img_h = image.size
-        polygon = [
-            (
-                int(round(min(max(x, 0), img_w - 1))),
-                int(round(min(max(y, 0), img_h - 1))),
-            )
-            for x, y in self.lasso_points_image
-        ]
-
-        mask = Image.new("1", (img_w, img_h), 0)
-        ImageDraw.Draw(mask).polygon(polygon, outline=1, fill=1)
+        polygon = self._lasso_polygon((img_w, img_h))
+        mask = self._build_lasso_mask((img_w, img_h))
 
         xs = [point[0] for point in polygon]
         ys = [point[1] for point in polygon]
@@ -503,6 +498,22 @@ class LassoCropApp:
         if right < left or bottom < top:
             return None
         return left, top, right, bottom
+
+    def _build_lasso_mask(self, size: tuple[int, int]) -> Image.Image:
+        polygon = self._lasso_polygon(size)
+        mask = Image.new("L", size, 0)
+        ImageDraw.Draw(mask).polygon(polygon, outline=255, fill=255)
+        return mask
+
+    def _lasso_polygon(self, size: tuple[int, int]) -> list[tuple[int, int]]:
+        img_w, img_h = size
+        return [
+            (
+                int(round(min(max(x, 0), img_w - 1))),
+                int(round(min(max(y, 0), img_h - 1))),
+            )
+            for x, y in self.lasso_points_image
+        ]
 
     @staticmethod
     def _rgba_on_white(image: Image.Image) -> Image.Image:
